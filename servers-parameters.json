@@ -5,11 +5,11 @@
 	},
     {
 		"ParameterKey": "ScalingGroupInstanceMinSize",
-		"ParameterValue": "2" 
+		"ParameterValue": "4" 
 	},
     {
 		"ParameterKey": "ScalingGroupInstanceMaxSize",
-		"ParameterValue": "2" 
+		"ParameterValue": "6" 
 	},
     {
 		"ParameterKey": "Ec2ImageId",
