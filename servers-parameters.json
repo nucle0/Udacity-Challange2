@@ -1,0 +1,34 @@
+[
+	{
+		"ParameterKey": "EnvironmentName",
+		"ParameterValue": "UdacityProjectChallange2"
+	},
+    {
+		"ParameterKey": "ScalingGroupInstanceMinSize",
+		"ParameterValue": "2" 
+	},
+    {
+		"ParameterKey": "ScalingGroupInstanceMaxSize",
+		"ParameterValue": "2" 
+	},
+    {
+		"ParameterKey": "Ec2ImageId",
+		"ParameterValue": "ami-080e1f13689e07408"
+	},
+    {
+		"ParameterKey": "Ec2InstanceType",
+		"ParameterValue": "t2.micro" 
+	},
+    {
+		"ParameterKey": "EC2VolumeSize",
+		"ParameterValue": "10"
+	},
+    {
+		"ParameterKey": "StudentPrivateIpAddress",
+		"ParameterValue": "90.95.136.43/32"
+	},
+    {
+		"ParameterKey": "Ec2BastionInstanceImage",
+		"ParameterValue": "ami-02d7fd1c2af6eead0"
+	}
+]

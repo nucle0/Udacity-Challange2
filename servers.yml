@@ -1,0 +1,188 @@
+Description: >
+    Avadanesei Marius / Udacity Challange 2 - Deploy a High-Availability Web App using CloudFormation 
+
+Parameters:
+
+    EnvironmentName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+
+    Ec2InstanceType:
+        Description: Type of ec2 instance used into deployment
+        Type: String
+
+    ScalingGroupInstanceMinSize:
+        Description: minimum instances of EC2
+        Type: String
+
+    ScalingGroupInstanceMaxSize:
+        Description: maximum instances of EC2
+        Type: String
+
+    Ec2ImageId:
+        Description: Id of image used for EC2 Instances for East-1
+        Type: String
+
+    EC2VolumeSize:
+        Description: Hard disk space used for each EC2 Instance
+        Type: String
+
+    StudentPrivateIpAddress:
+        Description: Student ip address for private access to Bastion instance
+        Type: String
+
+    Ec2BastionInstanceImage:
+        Description: Images used for bastion server
+        Type: String  
+  
+Resources:
+  LBSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our load balancer
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+  WebServerSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our hosts and SSH from local only
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+  WebAppLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          apt-get update -y
+          apt-get install apache2 -y
+          systemctl start apache2.service
+          cd /var/www/html
+          echo "it works! Udagram, Udacity" > index.html
+      ImageId: !Ref Ec2ImageId
+      SecurityGroups:
+        - Ref: WebServerSecGroup
+      InstanceType: !Ref Ec2InstanceType
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdk"
+          Ebs:
+            VolumeSize: !Ref EC2VolumeSize
+  WebAppGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+      - Fn::ImportValue: 
+          !Sub "${EnvironmentName}-PRIV-NETS"
+      LaunchConfigurationName:
+        Ref: WebAppLaunchConfig
+      MinSize: !Ref ScalingGroupInstanceMinSize
+      MaxSize: !Ref ScalingGroupInstanceMaxSize
+      TargetGroupARNs:
+      - Ref: WebAppTargetGroup
+  WebAppLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+      - Fn::ImportValue: !Sub "${EnvironmentName}-PUB1-SN"
+      - Fn::ImportValue: !Sub "${EnvironmentName}-PUB2-SN"
+      SecurityGroups:
+      - Ref: LBSecGroup
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: WebAppTargetGroup
+      LoadBalancerArn:
+        Ref: WebAppLB
+      Port: '80'
+      Protocol: HTTP
+  ALBListenerRule:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties:
+        Actions:
+        - Type: forward
+          TargetGroupArn: !Ref WebAppTargetGroup
+        Conditions:
+        - Field: path-pattern
+          Values: [/]
+        ListenerArn: !Ref 'Listener'
+        Priority: 1
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId: 
+        Fn::ImportValue:
+          Fn::Sub: "${EnvironmentName}-VPCID"
+  BastionSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our hosts and SSH from local only
+      VpcId:
+        Fn::ImportValue:
+          !Sub "${EnvironmentName}-VPCID"
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: !Ref StudentPrivateIpAddress
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 65535
+        CidrIp: 0.0.0.0/0
+  BastionInstance:
+        Type: AWS::EC2::Instance
+        Properties:
+            KeyName: Bastion-pair
+            ImageId: !Ref Ec2BastionInstanceImage
+            InstanceType: !Ref Ec2InstanceType
+            NetworkInterfaces:
+                -   AssociatePublicIpAddress: true
+                    DeleteOnTermination: true
+                    DeviceIndex: "0"
+                    GroupSet:
+                        - Ref: "BastionSecGroup"
+                    SubnetId: subnet-0b5756a15a1cec531
+
+Outputs:
+  LoadBalancerInformation:
+    Description: Public URL of the Load Balancer
+    Value: !Join ["", ["http://", !GetAtt WebAppLB.DNSName]]
+    Export:
+      Name: !Sub ${EnvironmentName}-LB-DNSName
